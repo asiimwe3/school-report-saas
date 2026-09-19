@@ -361,3 +361,144 @@ export function authRepo(db: PrismaClient) {
       }),
   };
 }
+
+// ── Billing (Pesapal) ───────────────────────────────────────────────────────
+import type {
+  BillingOrderRecord,
+  BillingRepo,
+  SubscriptionRecord,
+} from "../services/billing";
+import type { PlanTier as Tiers } from "../billing/tiers";
+
+const toSub = (s: {
+  schoolId: string;
+  plan: Tiers;
+  status: string;
+  trialEndsAt: Date | null;
+  currentPeriodEnd: Date | null;
+  maxStudents: number;
+  maxStaff: number;
+}): SubscriptionRecord => ({
+  schoolId: s.schoolId,
+  plan: s.plan,
+  status: s.status as SubscriptionRecord["status"],
+  trialEndsAt: s.trialEndsAt,
+  currentPeriodEnd: s.currentPeriodEnd,
+  maxStudents: s.maxStudents,
+  maxStaff: s.maxStaff,
+});
+
+const toOrder = (o: {
+  id: string; schoolId: string; plan: Tiers; amount: { toNumber(): number };
+  currency: string; status: string; orderTrackingId: string | null; merchantRef: string;
+  paymentMethod: string | null; confirmationCode: string | null; paidAt: Date | null; createdAt: Date;
+}): BillingOrderRecord => ({
+  id: o.id, schoolId: o.schoolId, plan: o.plan, amount: o.amount.toNumber(),
+  currency: o.currency, status: o.status as BillingOrderRecord["status"],
+  orderTrackingId: o.orderTrackingId, merchantRef: o.merchantRef,
+  paymentMethod: o.paymentMethod, confirmationCode: o.confirmationCode,
+  paidAt: o.paidAt, createdAt: o.createdAt,
+});
+
+export function billingRepo(db: PrismaClient): BillingRepo & {
+  listOrders(schoolId: string): Promise<BillingOrderRecord[]>;
+  findOrderWithTermEndsAt(merchantRef: string): Promise<BillingOrderRecord | null>;
+} {
+  const withTermEnds = async (o: ReturnType<typeof toOrder> & { termId: string | null }): Promise<BillingOrderRecord> => {
+    if (!o.termId) return { ...o, termEndsAt: null };
+    const term = await db.term.findFirst({ where: { id: o.termId } });
+    return { ...o, termEndsAt: term?.endDate ?? null };
+  };
+
+  return {
+    async createOrder(data) {
+      const merchantRef = `SRS-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+      const row = await db.billingOrder.create({
+        data: {
+          schoolId: data.schoolId,
+          plan: data.plan,
+          amount: data.amount,
+          currency: data.currency,
+          status: "AWAITING_PAYMENT",
+          merchantRef,
+        },
+      });
+      return { ...toOrder(row), merchantRef, termEndsAt: data.termEndsAt ?? null };
+    },
+    async findOrderByMerchantRef(ref) {
+      const row = await db.billingOrder.findFirst({
+        where: { merchantRef: ref },
+        include: { term: true },
+      });
+      if (!row) return null;
+      return {
+        ...toOrder(row),
+        termEndsAt: row.term?.endDate ?? null,
+      };
+    },
+    async setOrderTracking(id, orderTrackingId) {
+      await db.billingOrder.update({ where: { id }, data: { orderTrackingId } });
+    },
+    async markOrderPaid(id, info) {
+      await db.billingOrder.update({
+        where: { id },
+        data: {
+          status: "PAID",
+          orderTrackingId: info.orderTrackingId,
+          paymentMethod: info.paymentMethod ?? null,
+          confirmationCode: info.confirmationCode ?? null,
+          paidAt: info.paidAt,
+        },
+      });
+    },
+    async markOrderFailed(id, method) {
+      await db.billingOrder.update({ where: { id }, data: { status: "FAILED", paymentMethod: method ?? null } });
+    },
+    async findWebhook(orderTrackingId) {
+      const row = await db.pesapalWebhookEvent.findFirst({ where: { orderTrackingId } });
+      return row ? { id: row.id } : null;
+    },
+    async recordWebhook(data) {
+      await db.pesapalWebhookEvent.create({
+        data: {
+          orderTrackingId: data.orderTrackingId,
+          merchantRef: data.merchantRef,
+          status: data.status,
+          payload: (data.payload ?? {}) as object,
+        },
+      });
+    },
+    async getSubscription(schoolId) {
+      const row = await db.subscriptionAccount.findFirst({ where: { schoolId } });
+      return row ? toSub(row) : null;
+    },
+    async upsertSubscription(schoolId, data) {
+      const row = await db.subscriptionAccount.upsert({
+        where: { schoolId },
+        create: {
+          schoolId, plan: data.plan, status: data.status, provider: "pesapal",
+          currentPeriodEnd: data.currentPeriodEnd,
+          maxStudents: data.maxStudents ?? 999_999, maxStaff: data.maxStaff,
+        },
+        update: {
+          plan: data.plan, status: data.status, provider: "pesapal",
+          currentPeriodEnd: data.currentPeriodEnd,
+          maxStudents: data.maxStudents ?? 999_999, maxStaff: data.maxStaff,
+        },
+      });
+      return toSub(row);
+    },
+    async listOrders(schoolId) {
+      const rows = await db.billingOrder.findMany({
+        where: { schoolId },
+        orderBy: { createdAt: "desc" },
+        take: 50,
+      });
+      return rows.map((r) => toOrder(r));
+    },
+    async findOrderWithTermEndsAt(merchantRef) {
+      const row = await db.billingOrder.findFirst({ where: { merchantRef }, include: { term: true } });
+      return row ? { ...toOrder(row), termEndsAt: row.term?.endDate ?? null } : null;
+    },
+  };
+}

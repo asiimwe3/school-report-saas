@@ -16,7 +16,8 @@ export class ServiceError extends Error {
       | "VERSION_CONFLICT"
       | "VALIDATION"
       | "SHEET_LOCKED"
-      | "STATE_CONFLICT",
+      | "STATE_CONFLICT"
+      | "NOT_CONFIGURED",
     message: string
   ) {
     super(message);

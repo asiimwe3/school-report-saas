@@ -16,6 +16,7 @@ export type Action =
   | "school:manage_settings"
   | "school:manage_staff"
   | "billing:manage"
+  | "billing:view"
   // academic structure
   | "structure:manage" // years, terms, classes, streams, subjects, combinations
   | "students:view"
@@ -45,7 +46,7 @@ export type Action =
 
 const ROLE_PERMISSIONS: Record<Role, Action[]> = {
   SCHOOL_OWNER: [
-    "school:manage_settings", "school:manage_staff", "billing:manage",
+    "school:manage_settings", "school:manage_staff", "billing:manage", "billing:view",
     "structure:manage", "students:view", "students:manage",
     "marks:view", "marks:enter", "marks:import", "marks:approve", "marks:lock", "marks:unlock",
     "results:view", "reports:generate", "reports:manage_templates",
@@ -55,6 +56,7 @@ const ROLE_PERMISSIONS: Record<Role, Action[]> = {
   ],
   HEAD_TEACHER: [
     "structure:manage", "students:view", "students:manage",
+    "billing:view",
     "marks:view", "marks:enter", "marks:import", "marks:approve", "marks:lock", "marks:unlock",
     "results:view", "reports:generate",
     "fees:view",
@@ -76,6 +78,7 @@ const ROLE_PERMISSIONS: Record<Role, Action[]> = {
   ],
   BURSAR: [
     "students:view",
+    "billing:manage", "billing:view",
     "fees:view", "fees:record", "fees:manage",
   ],
   DATA_ENTRY: [

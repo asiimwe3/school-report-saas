@@ -34,6 +34,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <a href="/dashboard" style={{ color: pathname === "/dashboard" ? "var(--accent2)" : "var(--muted)" }}>Dashboard</a>
           <a href="/marks" style={{ color: pathname === "/marks" ? "var(--accent2)" : "var(--muted)" }}>Enter marks</a>
           <a href="/approve" style={{ color: pathname === "/approve" ? "var(--accent2)" : "var(--muted)" }}>Approvals</a>
+          <a href="/billing" style={{ color: pathname === "/billing" ? "var(--accent2)" : "var(--muted)" }}>Billing</a>
         </nav>
         <span className="spacer" />
         <select

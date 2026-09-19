@@ -75,6 +75,13 @@ enum PlanTier {
   GROWTH
   INSTITUTION
 }
+enum BillingStatus {
+  PENDING
+  AWAITING_PAYMENT
+  PAID
+  FAILED
+  CANCELLED
+}
 enum ImportStatus {
   PENDING
   PREVIEWING
@@ -187,6 +194,7 @@ model School {
   attendance        AttendanceRecord[]
   feeStructures     FeeStructure[]
   feePayments       FeePayment[]
+  billingOrders     BillingOrder[]
   reportTemplates   ReportTemplate[]
   generatedReports  GeneratedReport[]
   auditEvents       AuditEvent[]
@@ -231,35 +239,55 @@ model Invitation {
 }
 
 model SubscriptionAccount {
-  id                 String            @id @default(cuid())
-  schoolId           String            @unique
-  plan               PlanTier          @default(FREE_TRIAL)
-  status             SubscriptionStatus @default(TRIALING)
-  stripeCustomerId   String?           @unique
-  stripeSubscriptionId String?         @unique
+  id                 String              @id @default(cuid())
+  schoolId           String              @unique
+  plan               PlanTier            @default(FREE_TRIAL)
+  status             SubscriptionStatus  @default(TRIALING)
+  provider           String              @default("pesapal")
   trialEndsAt        DateTime?
   graceEndsAt        DateTime?
-  cancelAtPeriodEnd  Boolean           @default(false)
+  cancelAtPeriodEnd  Boolean             @default(false)
   currentPeriodEnd   DateTime?
-  maxStudents        Int               @default(50)
-  maxStaff           Int               @default(5)
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
-  school             School            @relation(fields: [schoolId], references: [id], onDelete: Cascade)
-  webhookEvents      StripeWebhookEvent[]
+  maxStudents        Int                 @default(50)
+  maxStaff           Int                 @default(5)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  school             School              @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  orders             BillingOrder[]
 
   @@index([status])
 }
 
-model StripeWebhookEvent {
-  id          String   @id @default(cuid()) // stripe event id — idempotency key
-  accountId   String?
-  type        String
-  payload     Json
-  processedAt DateTime @default(now())
-  account     SubscriptionAccount? @relation(fields: [accountId], references: [id])
+model BillingOrder {
+  id               String        @id @default(cuid())
+  schoolId         String
+  plan             PlanTier
+  termId           String?
+  amount           Decimal       @db.Decimal(12, 2) // UGX
+  currency         String        @default("UGX")
+  status           BillingStatus @default(AWAITING_PAYMENT)
+  orderTrackingId  String?       @unique
+  merchantRef      String        @unique
+  paymentMethod    String?
+  confirmationCode String?
+  paidAt           DateTime?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  term             Term?         @relation(fields: [termId], references: [id])
+  school           School        @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  account          SubscriptionAccount? @relation(fields: [accountId], references: [id])
+  accountId        String?
 
-  @@unique([id, type])
+  @@index([schoolId, createdAt])
+}
+
+model PesapalWebhookEvent {
+  id              String   @id @default(cuid()) // pesapal orderTrackingId — idempotency key
+  orderTrackingId String   @unique
+  merchantRef     String
+  status          String
+  payload         Json
+  processedAt     DateTime @default(now())
 }
 
 // ── Academic structure ──────────────────────────────────────────────────────
@@ -297,6 +325,7 @@ model Term {
   academicYear  AcademicYear  @relation(fields: [academicYearId], references: [id], onDelete: Cascade)
 
   marks        Mark[]
+  billingOrders BillingOrder[]
   markSheets   MarkSheet[]
   termResults  TermResult[]
   comments     Comment[]

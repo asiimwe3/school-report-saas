@@ -58,6 +58,12 @@ Delivered and verified in this phase:
   9 routes compiled; Prisma repos implement the tenant-scoped contracts
   with in-query optimistic concurrency.
 
+* Pesapal billing (UGX): per-term plans (Trial free 14d, Starter 200k,
+  Growth 400k, Premium 750k) with hosted checkout (card, MTN MoMo, Airtel
+  Money), untrusted-IPN re-verification via GetTransactionStatus, idempotent
+  webhook processing, order + subscription + audit trails, RBAC
+  (owner/bursar pay, head teacher views). 15 new tests (86 total).
+
 Explicitly NOT done yet (next phases — do not deploy as-is):
 
 1. Web UI (onboarding, dashboards, mark-entry workspace, approval queue…).
