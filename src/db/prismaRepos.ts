@@ -502,3 +502,84 @@ export function billingRepo(db: PrismaClient): BillingRepo & {
     },
   };
 }
+
+// ── Reports (report cards) ──────────────────────────────────────────────────
+import type { ReportsRepo, ReportSubjectRow } from "../services/reports";
+
+export function reportsRepo(db: PrismaClient): ReportsRepo {
+  return {
+    async getSchool(schoolId) {
+      const s = await db.school.findFirst({ where: { id: schoolId } });
+      return s ? { id: s.id, name: s.name, motto: s.shortName ?? null } : null;
+    },
+    async getStudent(schoolId, studentId) {
+      const s = await db.student.findFirst({ where: { id: studentId, schoolId } });
+      return s
+        ? {
+            id: s.id, firstName: s.firstName, middleName: s.middleName, lastName: s.lastName,
+            sex: s.sex, admissionNo: s.admissionNo,
+          }
+        : null;
+    },
+    async getEnrollment(schoolId, studentId, termId) {
+      const term = await db.term.findFirst({ where: { id: termId, schoolId } });
+      if (!term) return null;
+      const e = await db.enrollment.findFirst({
+        where: { schoolId, studentId, academicYearId: term.academicYearId, status: "ACTIVE" },
+        include: { class_: true, stream: true },
+      });
+      if (!e) return null;
+      return {
+        classId: e.classId,
+        className: e.class_.name,
+        level: e.class_.level as string,
+        streamName: e.stream?.name ?? null,
+        rollNo: e.rollNo ?? null,
+      };
+    },
+    async getTerm(schoolId, termId) {
+      const t = await db.term.findFirst({
+        where: { id: termId, schoolId },
+        include: { academicYear: true },
+      });
+      return t
+        ? {
+            id: t.id, name: t.name, year: t.academicYear.year,
+            endDate: t.endDate, nextTermBegins: t.nextTermBegins,
+          }
+        : null;
+    },
+    async getSubjectResults(schoolId, studentId, termId): Promise<ReportSubjectRow[]> {
+      const rows = await db.termResult.findMany({
+        where: { schoolId, studentId, termId },
+        include: { subject: true },
+        orderBy: { subject: { name: "asc" } },
+      });
+      return rows.map((r) => ({
+        subject: r.subject.name,
+        total: r.total?.toNumber() ?? null,
+        percentage: r.percentage?.toNumber() ?? null,
+        grade: r.grade,
+        points: r.points,
+        remark: r.remark,
+      }));
+    },
+    async getAttendance(schoolId, studentId, termId) {
+      const rows = await db.attendanceRecord.findMany({ where: { schoolId, studentId, termId } });
+      if (!rows.length) return null;
+      return {
+        present: rows.reduce((a, r) => a + r.daysPresent, 0),
+        absent: rows.reduce((a, r) => a + r.daysAbsent, 0),
+        total: rows.reduce((a, r) => a + r.daysTotal, 0),
+      };
+    },
+    async getComments(schoolId, studentId, termId) {
+      const rows = await db.comment.findMany({ where: { schoolId, studentId, termId } });
+      const byRole = Object.fromEntries(rows.map((c) => [c.authorRole, c.text]));
+      return {
+        classTeacher: byRole["CLASS_TEACHER"] ?? undefined,
+        headTeacher: byRole["HEAD_TEACHER"] ?? undefined,
+      };
+    },
+  };
+}

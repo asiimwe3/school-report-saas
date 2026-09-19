@@ -64,6 +64,12 @@ Delivered and verified in this phase:
   webhook processing, order + subscription + audit trails, RBAC
   (owner/bursar pay, head teacher views). 15 new tests (86 total).
 
+* Report cards: /api/reports/card renders per-student terminal reports
+  (RBAC reports:generate, audit-logged) as print-ready A4 HTML (Print →
+  Save as PDF) or editable DOCX; /reports UI page per class with PDF/DOCX
+  buttons; PLE divisions / UCE aggregates / UACE points summary, comments,
+  attendance, signature lines. 8 new tests (94 total).
+
 Explicitly NOT done yet (next phases — do not deploy as-is):
 
 1. Web UI (onboarding, dashboards, mark-entry workspace, approval queue…).

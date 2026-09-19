@@ -4,7 +4,7 @@ import { get } from "./client";
 
 export interface Me {
   user: { id: string };
-  schools: { id: string; name: string; role: string; status: string }[];
+  schools: { id: string; name: string; role: string; status: string; activeTermId: string | null }[];
 }
 
 /** Loads /api/me, keeps the active schoolId in sync with localStorage. */
