@@ -36,7 +36,7 @@ export async function requireCtx(req: NextRequest): Promise<Authed | { res: Next
   const tokenHash = sha256(token);
   const db = prisma();
   const session = await authRepo(db).findSessionByTokenHash(tokenHash);
-  if (!session || !digestMatches(token, session.tokenHash === tokenHash ? token : "")) {
+  if (!session || !digestMatches(token, session.tokenHash)) {
     return { res: jsonError("UNAUTHENTICATED", "Session expired; sign in again", 401) };
   }
 
