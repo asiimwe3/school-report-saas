@@ -125,45 +125,64 @@ async function main() {
       data: { schoolId: school.id, classId: klass.id, name: "West" },
     });
 
+    // subjects + mark sheets first (unique code per level)
+    const subjects: { id: string; name: string }[] = [];
     for (const subjectName of cls.subjects) {
       const subject = await db.subject.create({
         data: {
           schoolId: school.id, name: subjectName, level: cls.level,
-          compulsory: true, code: subjectName.slice(0, 3).toUpperCase(),
+          compulsory: true, code: subjectName.slice(0, 3).toUpperCase() + "-" + cls.level.slice(0, 2),
         },
       });
-      const sheet = await db.markSheet.create({
+      await db.markSheet.create({
         data: {
           schoolId: school.id, classId: klass.id, subjectId: subject.id, termId: term.id,
           state: SheetState.APPROVED,
         },
       });
-      void sheet;
+      subjects.push({ id: subject.id, name: subject.name });
+    }
 
-      // 12 students per class, 6 per stream
-      for (let i = 0; i < 12; i++) {
-        const sex = i % 2 === 0 ? "F" : "M";
-        const first = (sex === "F" ? FIRST_F : FIRST_M)[between(0, 11)];
-        const last = pick(LAST);
-        admNo += 1;
-        const student = await db.student.create({
-          data: {
-            schoolId: school.id, admissionNo: `D${admNo}`,
-            firstName: first, lastName: last, sex,
-            dateOfBirth: new Date(2009 - (cls.level === Level.PRIMARY ? 2 : cls.level === Level.O_LEVEL ? 3 : 5), between(1, 12), between(1, 28)),
-            guardianName: `${pick(LAST)} ${first}`, guardianPhone: "+2567" + between(10000000, 99999999),
-          },
-        });
-        const stream = i < 6 ? east : west;
-        const enrollment = await db.enrollment.create({
-          data: {
-            schoolId: school.id, studentId: student.id, academicYearId: year.id,
-            classId: klass.id, streamId: stream.id, rollNo: i + 1, status: "ACTIVE",
-          },
-        });
+    // then 12 students (6 per stream), each marked in EVERY subject
+    for (let i = 0; i < 12; i++) {
+      const sex = i % 2 === 0 ? "F" : "M";
+      const first = (sex === "F" ? FIRST_F : FIRST_M)[between(0, 11)];
+      const last = pick(LAST);
+      admNo += 1;
+      const student = await db.student.create({
+        data: {
+          schoolId: school.id, admissionNo: `D${admNo}`,
+          firstName: first, lastName: last, sex,
+          dateOfBirth: new Date(2009 - (cls.level === Level.PRIMARY ? 2 : cls.level === Level.O_LEVEL ? 3 : 5), between(1, 12), between(1, 28)),
+          guardianName: `${pick(LAST)} ${first}`, guardianPhone: "+2567" + between(10000000, 99999999),
+        },
+      });
+      const stream = i < 6 ? east : west;
+      const enrollment = await db.enrollment.create({
+        data: {
+          schoolId: school.id, studentId: student.id, academicYearId: year.id,
+          classId: klass.id, streamId: stream.id, rollNo: i + 1, status: "ACTIVE",
+        },
+      });
 
-        // Marks: CA components per level scheme
-        const isO = cls.level === Level.O_LEVEL;
+      // Attendance + comments (once per student)
+      await db.attendanceRecord.create({
+        data: {
+          schoolId: school.id, studentId: student.id, enrollmentId: enrollment.id,
+          termId: term.id, classId: klass.id, streamId: stream.id,
+          daysPresent: between(78, 92), daysAbsent: between(0, 6), daysTotal: 92,
+        },
+      });
+      await db.comment.createMany({
+        data: [
+          { schoolId: school.id, studentId: student.id, termId: term.id, authorRole: "CLASS_TEACHER", text: `${first} is ${rnd() > 0.5 ? "hardworking and disciplined" : "improving steadily"}. Keep it up.`, createdBy: users[Role.TEACHER] },
+          { schoolId: school.id, studentId: student.id, termId: term.id, authorRole: "HEAD_TEACHER", text: `Promoted to the next class. ${rnd() > 0.5 ? "Excellent" : "Good"} performance overall.`, createdBy: users[Role.HEAD_TEACHER] },
+        ],
+      });
+
+      // Marks: CA components per level scheme
+      const isO = cls.level === Level.O_LEVEL;
+      for (const subject of subjects) {
         const parts: { code: string; score: number; max: number }[] = isO
           ? [
               { code: "BOT", score: between(20, 90), max: 100 },
@@ -213,26 +232,10 @@ async function main() {
             blockingReasons: r.blockingReasons as string[],
           },
         });
-
-        // Attendance, comments (first subject iteration only)
-        if (subjectName === cls.subjects[0]) {
-          await db.attendanceRecord.create({
-            data: {
-              schoolId: school.id, studentId: student.id, enrollmentId: enrollment.id,
-              termId: term.id, classId: klass.id, streamId: stream.id,
-              daysPresent: between(78, 92), daysAbsent: between(0, 6), daysTotal: 92,
-            },
-          });
-          await db.comment.createMany({
-            data: [
-              { schoolId: school.id, studentId: student.id, termId: term.id, authorRole: "CLASS_TEACHER", text: `${first} is ${rnd() > 0.5 ? "hardworking and disciplined" : "improving steadily"}. Keep it up.`, createdBy: users[Role.TEACHER] },
-              { schoolId: school.id, studentId: student.id, termId: term.id, authorRole: "HEAD_TEACHER", text: `Promoted to the next class. ${rnd() > 0.5 ? "Excellent" : "Good"} performance overall.`, createdBy: users[Role.HEAD_TEACHER] },
-            ],
-          });
-        }
       }
-      console.log(`  ${cls.name}: 12 students × ${cls.subjects.length} subjects marked & graded`);
     }
+    console.log(`  ${cls.name}: 12 students × ${cls.subjects.length} subjects marked & graded`);
+  }
   }
 
   // ── Trial subscription ──────────────────────────────────────────────────
