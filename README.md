@@ -70,6 +70,12 @@ Delivered and verified in this phase:
   buttons; PLE divisions / UCE aggregates / UACE points summary, comments,
   attendance, signature lines. 8 new tests (94 total).
 
+* Demo seed (prisma/seed.ts, `npm run seed`): one school covering
+  PLE/UCE/UACE with 6 role logins (Demo1234!), 3 classes × 12 students,
+  marks graded through the real engine, comments, attendance, trial
+  subscription. Guarded by DEMO_SEED_ALLOWED=1; --reset wipes/reseeds.
+  SQL init migration generated (prisma/migrations/0001_init).
+
 Explicitly NOT done yet (next phases — do not deploy as-is):
 
 1. Web UI (onboarding, dashboards, mark-entry workspace, approval queue…).
@@ -116,3 +122,32 @@ DATABASE_URL=... npx prisma migrate deploy   # after prisma migrate dev
 * Backups: insert → validate → prune; never delete-then-insert.
 * ABS/MISSING/EXEMPT/NA are real states, never silent zeros (DB CHECK).
 * Current-term/current-year are explicit per school, never inferred.
+
+## Running locally
+
+```bash
+# 1. Postgres (any 14+; docker works too)
+createdb srs
+
+# 2. Env
+cp .env.example .env   # set DATABASE_URL, AUTH_SECRET, SESSION_SECRET
+
+# 3. Schema + demo data
+npm install
+npm run db:migrate:dev
+DEMO_SEED_ALLOWED=1 npm run seed
+
+# 4. Dev server
+npm run dev
+```
+
+Demo logins: owner@ / head@ / admin@ / teacher@ / bursar@ / data@
+demo.derycode.online — password `Demo1234!`.
+
+## Deploying
+
+```bash
+npm run db:migrate:deploy   # apply prisma/migrations on the prod DB
+# set env: DATABASE_URL, AUTH_SECRET, SESSION_SECRET, APP_BASE_URL,
+#          PESAPAL_CONSUMER_KEY/SECRET, PESAPAL_ENV=live
+```
