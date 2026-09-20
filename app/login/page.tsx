@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { post } from "@/src/lib/client";
@@ -56,6 +57,9 @@ export default function LoginPage() {
             {busy ? "Signing in…" : "Sign in"}
           </button>
         </form>
+        <p className="sub" style={{ marginBottom: 0 }}>
+          New school? <Link href="/register">Create an account</Link>
+        </p>
       </div>
     </div>
   );
